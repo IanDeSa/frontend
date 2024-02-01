@@ -10,11 +10,18 @@ const typeFile = z.custom<FileList>((val) => {
   return val instanceof FileList;
 }, { message: 'O valor deve ser uma imagem!' });
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5mb
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
 const schema = z.object({
     nome: z.string().min(1, 'Campo obrigatório!'),
     descricao: z.string().min(1, 'Campo obrigatório!'),
     preco: z.string().min(1, 'Campo obrigatório!'),
-    imagem: typeFile.transform(list => list.item(0)),
+    imagem: typeFile.refine((files) => files.item(0)!.size <= MAX_FILE_SIZE, `Tamanho máximo de 5MB`)
+      .refine(
+        (files) => ACCEPTED_IMAGE_TYPES.includes(files.item(0)!.type),
+        "Formato de imagem inválido"
+      ).transform(list => list.item(0)),
     habilitado: z.string().min(1, 'Campo obrigatório!'),
     categoria: z.string().min(1),
   }).refine(data => {
