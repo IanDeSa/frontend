@@ -1,27 +1,71 @@
 "use client";
 
-import { useForm } from 'react-hook-form';
+import { useForm, FormProvider } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { json } from 'stream/consumers';
+import { Form } from './Form';
+import React from 'react';
+
+const typeFile = z.custom<FileList>((val) => {
+  return val instanceof FileList;
+}, { message: 'O valor deve ser uma imagem!' });
 
 const schema = z.object({
     nome: z.string().min(1, 'Campo obrigatório!'),
     descricao: z.string().min(1, 'Campo obrigatório!'),
-    preco: z.string(),
-    imagem: z.instanceof(FileList).transform(list => list.item(0)),
-    habilitado: z.boolean(),
-    categoria: z.enum(['Smart', 'Mini', 'Tag', 'Totem'])
-  });
+    preco: z.string().min(1, 'Campo obrigatório!'),
+    imagem: typeFile.transform(list => list.item(0)),
+    habilitado: z.string().min(1, 'Campo obrigatório!'),
+    categoria: z.string().min(1),
+  }).refine(data => {
+    return data.imagem !== null && data.imagem !== undefined;
+}, {
+    message: 'Imagem é um campo obrigatório!',
+    path: ['imagem'],
+});
 
 type createFormType = z.infer<typeof schema>
 
+const categorias = [
+  { value: 'Smart', label: 'Smart' },
+  { value: 'Mini', label: 'Mini' },
+  { value: 'Tag', label: 'Tag' },
+  { value: 'Totem', label: 'Totem' },
+];
+
+const habilitadoOpcoes = [
+  { value: 'y', label: 'Sim' },
+  { value: 'n', label: 'Não' },
+];
+
 export function CreateForm() {
-  const { register, handleSubmit, formState: { errors } } = useForm<createFormType>({
+  const [value, setValue] = React.useState<string>('');
+  const [isError, setIsError] = React.useState(false);
+  const [isSuccess, setIsSuccess] = React.useState(false);
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.target.value;
+
+    if (!/^\d*\.?\d*$/.test(input)) return;
+
+    const sanitizedValue = input.replace(/[^\d,]/g, '');
+  
+    const formattedValue= (parseFloat(sanitizedValue)/100).toFixed(2);
+
+    setValue(formattedValue);
+  };
+
+  const criacaoForm = useForm<createFormType>({
     resolver: zodResolver(schema),
   });
 
-  function converterImagemParaBase64(imagem: File | null): Promise<string> | null {
+  const { 
+    handleSubmit, 
+    formState: { isSubmitting }, 
+    reset,
+  } = criacaoForm;
+
+  function converterImagemParaBase64(imagem: any): Promise<string> | null {
     return imagem ? new Promise((resolve, reject) => {
       const reader = new FileReader();
   
@@ -37,71 +81,117 @@ export function CreateForm() {
       reader.readAsDataURL(imagem);
     }) : null;
   }
-  
 
   async function onSubmit(data: createFormType) {
-    console.log('chegou aqui', data);
     const imgBase64 = await converterImagemParaBase64(data.imagem);
     const bodyRequest = {
       ...data,
       imagem: imgBase64,
+      preco: parseFloat(data.preco),
+      habilitado: data.habilitado === 'y' ? true : false, 
     };
 
-    await fetch("http://localhost:3000/api/dispositivos", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(bodyRequest),
-    });
+    try {
+      await fetch("http://localhost:3000/api/dispositivos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bodyRequest),
+      });
+      setIsSuccess(true);
+      reset();
+      setTimeout(() => setIsSuccess(false), 3000);
+      setValue('');
+    } catch (error) {
+      setIsError(true);
+      setTimeout(() => setIsError(false), 3000);
+    }
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <div className="mb-4">
-        <label className="block mb-2 text-black" htmlFor="nome">Nome:</label>
-        <input autoComplete='off' className="w-full p-2 border border-gray-300 rounded-md text-black" type="text" id="nome" {...register('nome')} />
-        {errors.nome && <span>{errors.nome.message}</span>}
-      </div>
-      <div className="mb-2">
-        <label className="block mb-2 text-black" htmlFor="descricao">Descrição:</label>
-        <textarea style={{ resize: 'none' }} className="w-full p-2 border border-gray-300 rounded-md text-black" id="descricao" {...register('descricao')} />
-        {errors.descricao && <span>{errors.descricao.message}</span>}
-      </div>
-      <div className="mb-4">
-        <label className="block mb-2 text-black" htmlFor="preco">Preço:</label>
-        <input className="appearance-nonew-full p-2 border border-gray-300 rounded-md text-black" type="text" id="preco" {...register('preco')} />
-        {errors.preco && <span>{errors.preco.message}</span>}
-      </div>
-      <div className="mb-2">
-        <label className="bg-sky-800 hover:bg-sky-700 font-bold py-2 px-4 rounded cursor-pointer text-white" htmlFor="imagem">Imagem</label>
-        <input className="hidden" type="file" id="imagem" accept=".jpg,.png" {...register('imagem')} />
-        {errors.imagem && <span>{errors.imagem.message}</span>}
-      </div>
-      <div className='flex justify-between'>
-        <div className="mb-2 w-1/2">
-          <label className="block mb-2 text-black" htmlFor="categoria">Categoria:</label>
-          <select className="w-full p-2 border border-gray-300 rounded-md text-black" id="categoria" {...register('categoria')}>
-            <option value="Smart">Smart</option>
-            <option value="Mini">Mini</option>
-            <option value="Tag">Tag</option>
-            <option value="Totem">Totem</option>
-          </select>
-          {errors.categoria && <span>{errors.categoria.message}</span>}
+    <FormProvider {...criacaoForm}>
+      {isSuccess && (
+        <div className="bg-green-500 text-white p-2 mb-2">
+          Dispositivo criado com sucesso!
         </div>
-        <div className="w-1/2 mb-0 flex items-center justify-center">
-          <div>
-              <label htmlFor='habilitado' className="block mb-0 text-black">
-                  Habilitado:
-              </label>
-          </div>
-          <div>
-              <input id='habilitado' className="p-2 borderrounded-md ml-2" type="checkbox" {...register('habilitado')} />
-          </div>
+      )}
+      {isError && (
+        <div className="bg-red-500 text-white p-2 mb-2">
+          Ocorreu um erro ao criar um dispositivo. Tente novamente.
         </div>
-      </div>
-      <button className="bg-sky-800 hover:bg-sky-700 text-white font-bold py-2 px-4 mt-2 rounded" type="submit">Enviar</button>
-    </form>
+      )}
+      <form 
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex flex-col gap-4 w-full max-w-xs"
+      >
+        <Form.Field>
+          <Form.Label htmlFor="nome">
+            Nome
+          </Form.Label>
+          <Form.Input type="text" name="nome" />
+          <Form.ErrorMessage field="nome" />
+        </Form.Field>
+
+        <Form.Field>
+          <Form.Label htmlFor="descricao">
+            Descrição
+          </Form.Label>
+          <Form.Textarea
+            name="descricao"
+            style={{ resize: 'none' }}
+            className="w-full p-2 border border-gray-300 rounded-md text-black"
+          />
+          <Form.ErrorMessage field="descricao" />
+        </Form.Field>
+
+        <Form.Field>
+          <Form.Label htmlFor="descricao">
+            Preço
+          </Form.Label>
+          <Form.Input
+            type="text"
+            name="preco"
+            value={value}
+            onChange={handleChange}
+          />
+          <Form.ErrorMessage field="descricao" />
+        </Form.Field>
+
+        <Form.Field>
+          <Form.Label htmlFor="categoria">
+            Categoria
+          </Form.Label>
+          <Form.Select name="categoria" options={categorias}/>
+          <Form.ErrorMessage field="descricao" />
+        </Form.Field>
+
+        <Form.Field>
+          <Form.Label htmlFor="habilitado">
+            Habilitado
+          </Form.Label>
+          <Form.Radio name="habilitado" options={habilitadoOpcoes}/>
+          <Form.ErrorMessage field="habilitado" />
+        </Form.Field>
+
+        <Form.Field>
+          <Form.Label htmlFor="imagem">
+            Imagem
+          </Form.Label>
+
+          <Form.Input type="file" name="imagem" />
+          <Form.ErrorMessage field="imagem" />
+        </Form.Field>
+
+        <button
+          type="submit" 
+          disabled={isSubmitting}
+          className="bg-sky-500 text-white rounded px-3 h-10 font-semibold text-sm hover:bg-sky-600 mb-2"
+        >
+          Salvar
+        </button>
+      </form>
+    </FormProvider>
   );
 }
 
