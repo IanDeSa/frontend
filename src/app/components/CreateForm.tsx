@@ -3,6 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { json } from 'stream/consumers';
 
 const schema = z.object({
     nome: z.string().min(1, 'Campo obrigatório!'),
@@ -11,7 +12,7 @@ const schema = z.object({
     imagem: z.instanceof(FileList).transform(list => list.item(0)),
     habilitado: z.boolean(),
     categoria: z.enum(['Smart', 'Mini', 'Tag', 'Totem'])
-  }).partial();
+  });
 
 type createFormType = z.infer<typeof schema>
 
@@ -20,21 +21,39 @@ export function CreateForm() {
     resolver: zodResolver(schema),
   });
 
-  async function onSubmit(data: createFormType) {
-    console.log('chegou aqui', data)
-    // event.preventDefault();
-    // const name = document.querySelector<HTMLInputElement>("#name")!.value;
-    // const description =
-    //   document.querySelector<HTMLInputElement>("#description")!.value;
-    // console.log(name, description);
+  function converterImagemParaBase64(imagem: File | null): Promise<string> | null {
+    return imagem ? new Promise((resolve, reject) => {
+      const reader = new FileReader();
+  
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        resolve(base64);
+      };
+  
+      reader.onerror = () => {
+        reject(new Error('Erro ao ler a imagem'));
+      };
+  
+      reader.readAsDataURL(imagem);
+    }) : null;
+  }
+  
 
-    // await fetch("http://localhost:3000/api/categories", {
-    //   method: "POST",
-    //   headers: {
-    //     "Content-Type": "application/json",
-    //   },
-    //   body: JSON.stringify({ name, description }),
-    // });
+  async function onSubmit(data: createFormType) {
+    console.log('chegou aqui', data);
+    const imgBase64 = await converterImagemParaBase64(data.imagem);
+    const bodyRequest = {
+      ...data,
+      imagem: imgBase64,
+    };
+
+    await fetch("http://localhost:3000/api/dispositivos", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(bodyRequest),
+    });
   }
 
   return (
