@@ -35,7 +35,7 @@ export default function CardItem (props: FieldProps){
         height={200}
       />
       <div className="px-6 py-4">
-        <div className="font-bold text-lg mb-2">{props.nome}</div>
+        <div className="font-bold text-lg mb-2 text-black">{props.nome}</div>
         <p className="text-gray-700 text-base">{props.descricao}</p>
         <p className="text-gray-700 text-base">R$ {props.preco}</p>
         <p className="text-gray-700 text-base">{props.habilitado ? 'Habilitado': 'Não habilitado'}</p>
